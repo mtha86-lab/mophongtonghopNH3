@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô Phỏng 3D Quá Trình Haber-Bosch - Tổng Hợp Ammonia</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera interaction -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Chart.js for real-time graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Custom Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        .pulse-effect {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-indigo-900 text-white px-4 py-2.5 flex items-center justify-between shadow-md z-30 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white shadow">
+                <i data-lucide="atom" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold leading-tight flex items-center gap-2">
+                    MÔ PHỎNG 3D: QUÁ TRÌNH HABER - BOSCH
+                    <span class="bg-amber-500 text-slate-900 text-xs px-2 py-0.5 rounded-full font-semibold">Hóa Học 11</span>
+                </h1>
+                <p class="text-xs text-indigo-200">Cân bằng hóa học & Điều kiện tối ưu tổng hợp Ammonia (NH<sub>3</sub>)</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button id="btnTeacherMode" onclick="toggleTeacherMode()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-800 hover:bg-indigo-700 text-indigo-100 transition border border-indigo-600">
+                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+                <span id="teacherModeText">Chế độ: Học sinh</span>
+            </button>
+            <button onclick="toggleFullscreen()" class="p-2 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-indigo-100 transition" title="Toàn màn hình">
+                <i data-lucide="maximize" class="w-4 h-4"></i>
+            </button>
+            <button onclick="resetSimulation()" class="p-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1 text-xs font-medium" title="Đặt lại mô phỏng">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                <span>Đặt lại</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shadow-sm z-20 shrink-0">
+            <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                    <i data-lucide="list-checks" class="w-4 h-4 text-indigo-600"></i> Tiến trình khám phá
+                </span>
+                <span class="text-xs font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full" id="actProgress">1/5</span>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 space-y-2" id="activityList">
+                <button onclick="selectActivity(1)" id="actBtn1" class="w-full text-left p-3 rounded-xl border transition-all flex items-start gap-3 bg-indigo-50 border-indigo-200 text-indigo-900 shadow-sm">
+                    <div class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">1</div>
+                    <div>
+                        <div class="font-semibold text-sm">Cấu trúc vi mô & Phản ứng</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Quan sát các phân tử N<sub>2</sub>, H<sub>2</sub>, NH<sub>3</sub> và phương trình nhiệt hóa học.</div>
+                    </div>
+                </button>
+
+                <button onclick="selectActivity(2)" id="actBtn2" class="w-full text-left p-3 rounded-xl border border-slate-200 transition-all flex items-start gap-3 hover:bg-slate-50 text-slate-700">
+                    <div class="bg-slate-200 text-slate-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">2</div>
+                    <div>
+                        <div class="font-semibold text-sm">Ảnh hưởng của Nhiệt độ</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Khảo sát phản ứng tỏa nhiệt theo nguyên lý Le Chatelier.</div>
+                    </div>
+                </button>
+
+                <button onclick="selectActivity(3)" id="actBtn3" class="w-full text-left p-3 rounded-xl border border-slate-200 transition-all flex items-start gap-3 hover:bg-slate-50 text-slate-700">
+                    <div class="bg-slate-200 text-slate-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">3</div>
+                    <div>
+                        <div class="font-semibold text-sm">Ảnh hưởng của Áp suất</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Khảo sát sự thay đổi thể tích khí (4 mol khí &rarr; 2 mol khí).</div>
+                    </div>
+                </button>
+
+                <button onclick="selectActivity(4)" id="actBtn4" class="w-full text-left p-3 rounded-xl border border-slate-200 transition-all flex items-start gap-3 hover:bg-slate-50 text-slate-700">
+                    <div class="bg-slate-200 text-slate-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">4</div>
+                    <div>
+                        <div class="font-semibold text-sm">Xúc tác & Điều kiện Công nghiệp</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Tối ưu hóa 400 - 450&nbsp;&deg;C, 150 - 200 bar và bột sắt (Fe).</div>
+                    </div>
+                </button>
+
+                <button onclick="selectActivity(5)" id="actBtn5" class="w-full text-left p-3 rounded-xl border border-slate-200 transition-all flex items-start gap-3 hover:bg-slate-50 text-slate-700">
+                    <div class="bg-slate-200 text-slate-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">5</div>
+                    <div>
+                        <div class="font-semibold text-sm">Thử thách Kỹ sư Vận hành</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Minigame 5 câu hỏi trắc nghiệm kiểm tra kiến thức toàn diện.</div>
+                    </div>
+                </button>
+            </div>
+
+            <div class="p-3 bg-indigo-900 text-white border-t border-indigo-950">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-bold flex items-center gap-1 text-amber-400">
+                        <i data-lucide="compass" class="w-4 h-4"></i> Hướng dẫn khám phá
+                    </span>
+                    <button id="btnToggleAnswer" onclick="toggleAnswer()" class="hidden text-xs text-indigo-200 hover:text-white underline">
+                        Hiện đáp án GV
+                    </button>
+                </div>
+                <div id="guideText" class="text-xs text-indigo-100 leading-relaxed max-h-36 overflow-y-auto pr-1">
+                    Hãy xoay mô hình 3D buồng phản ứng và nhấn <b>Bắt đầu</b> để quan sát sự di chuyển va chạm của các phân tử N<sub>2</sub> và H<sub>2</sub>.
+                </div>
+                <div id="answerBox" class="hidden mt-2 p-2 bg-indigo-950 rounded border border-indigo-800 text-xs text-amber-200">
+                    <strong>Kết luận sư phạm:</strong>
+                    <div id="answerText">...</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col relative bg-slate-900 overflow-hidden">
+
+            <div id="canvasContainer" class="canvas-container flex-1">
+                <canvas id="threeCanvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+                <div class="absolute top-4 left-4 glass-panel rounded-xl p-3 shadow-lg z-10 flex flex-col space-y-2 text-xs">
+                    <div class="font-semibold text-slate-700 border-b pb-1 flex items-center gap-1">
+                        <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-600"></i> Chú thích mô hình 3D
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-blue-600 inline-block shadow-sm"></span>
+                        <span class="text-slate-600 font-medium">Nitrogen (N<sub>2</sub>)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-slate-200 border border-slate-400 inline-block shadow-sm"></span>
+                        <span class="text-slate-600 font-medium">Hydrogen (H<sub>2</sub>)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-teal-400 inline-block shadow-sm"></span>
+                        <span class="text-slate-600 font-medium">Ammonia (NH<sub>3</sub>)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-sm bg-amber-600 inline-block shadow-sm"></span>
+                        <span class="text-slate-600 font-medium">Xúc tác bột sắt (Fe)</span>
+                    </div>
+                </div>
+
+                <div class="absolute top-4 right-4 flex items-center bg-slate-800/80 backdrop-blur rounded-lg border border-slate-700 p-1 text-white z-10 space-x-1">
+                    <button onclick="resetCamera()" class="p-1.5 hover:bg-slate-700 rounded transition" title="Đặt lại góc nhìn">
+                        <i data-lucide="camera" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="toggleMolView()" id="btnMolView" class="p-1.5 hover:bg-slate-700 rounded transition text-indigo-400" title="Chế độ phân tử / Nhà máy">
+                        <i data-lucide="box" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <div id="statusAlert" class="hidden absolute top-16 left-1/2 -translate-x-1/2 glass-panel border-amber-400 bg-amber-500/10 text-amber-900 px-4 py-2 rounded-full font-semibold text-xs flex items-center gap-2 shadow-xl z-10 animate-bounce">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>
+                    <span id="statusAlertText">Nhiệt độ cao làm giảm hiệu suất cân bằng!</span>
+                </div>
+
+                <div class="absolute bottom-4 left-4 glass-panel rounded-xl p-3 shadow-lg z-10 flex items-center space-x-6 text-slate-800">
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Hiệu suất thu NH<sub>3</sub></div>
+                        <div class="text-xl font-extrabold text-indigo-600 flex items-baseline gap-1">
+                            <span id="statYield">15.0</span><span class="text-xs font-normal">%</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-slate-200"></div>
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Tốc độ phản ứng</div>
+                        <div class="text-xl font-extrabold text-emerald-600 flex items-baseline gap-1">
+                            <span id="statSpeed">Trung bình</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-slate-200"></div>
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Trạng thái hệ</div>
+                        <div id="statEquil" class="text-xs font-bold text-amber-600 mt-1 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-amber-500 inline-block animate-ping"></span> Đang phản ứng...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white border-t border-slate-200 p-4 shadow-lg z-20 shrink-0">
+                <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+
+                    <div class="flex items-center space-x-2 shrink-0">
+                        <button id="btnPlay" onclick="togglePlay()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center gap-2 shadow-md transition-all active:scale-95">
+                            <i id="btnPlayIcon" data-lucide="play" class="w-4 h-4"></i>
+                            <span id="btnPlayText">Bắt đầu</span>
+                        </button>
+                        <button onclick="resetSimulation()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm flex items-center gap-2 border border-slate-300 transition-all">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                            <span>Làm mới</span>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1 w-full max-w-3xl">
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col justify-between">
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                    <i data-lucide="thermometer" class="w-4 h-4 text-rose-500"></i> Nhiệt độ (T)
+                                </label>
+                                <span class="text-xs font-extrabold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200" id="valTemp">450 &deg;C</span>
+                            </div>
+                            <input type="range" id="sliderTemp" min="200" max="650" step="10" value="450" oninput="updateParams()" class="w-full accent-rose-600 cursor-pointer">
+                            <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-medium">
+                                <span>200&nbsp;&deg;C (Thấp)</span>
+                                <span>450&nbsp;&deg;C (Tối ưu)</span>
+                                <span>650&nbsp;&deg;C (Cao)</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col justify-between">
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                    <i data-lucide="gauge" class="w-4 h-4 text-sky-500"></i> Áp suất (P)
+                                </label>
+                                <span class="text-xs font-extrabold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-200" id="valPress">200 bar</span>
+                            </div>
+                            <input type="range" id="sliderPress" min="10" max="350" step="10" value="200" oninput="updateParams()" class="w-full accent-sky-600 cursor-pointer">
+                            <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-medium">
+                                <span>10 bar</span>
+                                <span>200 bar</span>
+                                <span>350 bar</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col justify-between">
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                    <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i> Xúc tác bột sắt (Fe)
+                                </label>
+                                <span class="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200" id="valCat">Có xúc tác</span>
+                            </div>
+                            <div class="flex items-center justify-between mt-2">
+                                <span class="text-xs text-slate-500 font-medium">Trạng thái:</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="toggleCat" checked onchange="updateParams()" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+
+        <aside class="w-80 bg-white border-l border-slate-200 flex flex-col shadow-sm z-20 shrink-0">
+
+            <div class="p-3 bg-slate-50 border-b border-slate-200">
+                <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+                    <i data-lucide="binary" class="w-4 h-4 text-indigo-600"></i> Phương trình Nhiệt Hóa Học
+                </div>
+                <div class="p-2.5 bg-indigo-950 text-white rounded-xl text-center shadow-inner">
+                    <div class="font-mono text-sm font-bold tracking-wide text-indigo-200">
+                        N<sub>2</sub>(<i>g</i>) + 3H<sub>2</sub>(<i>g</i>) <span class="text-amber-400">&rightleftharpoons;</span> 2NH<sub>3</sub>(<i>g</i>)
+                    </div>
+                    <div class="text-xs font-semibold text-rose-300 mt-1 border-t border-indigo-800/60 pt-1">
+                        &Delta;<sub>r</sub>H<sup>0</sup><sub>298</sub> = -91,8 kJ <span class="text-[10px] text-indigo-300">(Phản ứng tỏa nhiệt)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-3 flex-1 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                            <i data-lucide="line-chart" class="w-4 h-4 text-emerald-600"></i> Nồng độ chất theo thời gian (Cân bằng)
+                        </span>
+                    </div>
+                    <div class="h-48 relative w-full bg-slate-50 rounded-xl p-2 border border-slate-200">
+                        <canvas id="chartConcentration"></canvas>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-1 text-center italic">
+                        * Cân bằng thiết lập: Tồn tại đồng thời cả 3 chất N<sub>2</sub>, H<sub>2</sub>, NH<sub>3</sub>.
+                    </div>
+                </div>
+
+                <div class="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                    <div class="font-bold text-slate-700 flex items-center gap-1 border-b pb-1">
+                        <i data-lucide="info" class="w-3.5 h-3.5 text-sky-600"></i> Thông số lý thuyết
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Số mol khí trước phản ứng:</span>
+                        <span class="font-semibold text-slate-800">4 mol (1 N<sub>2</sub> + 3 H<sub>2</sub>)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Số mol khí sau phản ứng:</span>
+                        <span class="font-semibold text-slate-800">2 mol (2 NH<sub>3</sub>)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Biến thiên thể tích:</span>
+                        <span class="font-semibold text-sky-600">Giảm thể tích (4 &rarr; 2)</span>
+                    </div>
+                </div>
+
+                <div id="quizContainer" class="hidden mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                    <div class="text-xs font-bold text-amber-900 flex items-center justify-between mb-1">
+                        <span class="flex items-center gap-1"><i data-lucide="trophy" class="w-4 h-4 text-amber-600"></i> Thử thách Kỹ sư</span>
+                        <span id="quizScore" class="bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">Điểm: 0</span>
+                    </div>
+                    <div id="quizProgress" class="text-[10px] font-semibold text-amber-700 mb-1">Câu hỏi 1/5</div>
+                    <p id="quizQuestion" class="text-xs text-amber-800 font-medium mb-2">Đang tải câu hỏi...</p>
+                    <div id="quizOptions" class="space-y-1.5"></div>
+                </div>
+            </div>
+
+        </aside>
+
+    </div>
+
+    <script>
+        const state = {
+            isPlaying: false,
+            teacherMode: false,
+            currentActivity: 1,
+            showAnswer: false,
+            temp: 450,       
+            press: 200,      
+            catalyst: true,  
+            yieldNH3: 15.0,  
+            timeStep: 0,
+            viewMode: 'factory', 
+            quizScore: 0,
+            molecules: []
+        };
+
+        let scene, camera, renderer, controls;
+        let reactorMesh, moleculesGroup, catalystBedMesh;
+        let chartInstance;
+
+        window.addEventListener('load', () => {
+            initLucide();
+            initThreeJS();
+            initChart();
+            setupEventListeners();
+            selectActivity(1);
+            animate();
+        });
+
+        function initLucide() {
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function initThreeJS() {
+            const container = document.getElementById('canvasContainer');
+            if (!container) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a); 
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.015);
+
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            camera.position.set(0, 10, 25);
+
+            const canvasEl = document.getElementById('threeCanvas');
+            if (!canvasEl) return;
+            renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+
+            if (typeof THREE.OrbitControls !== 'undefined') {
+                controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.maxDistance = 50;
+                controls.minDistance = 5;
+            }
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 15);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0x38bdf8, 1, 20);
+            pointLight.position.set(0, 0, 0);
+            scene.add(pointLight);
+
+            moleculesGroup = new THREE.Group();
+            scene.add(moleculesGroup);
+
+            build3DReactor();
+            generate3DMolecules();
+        }
+
+        function build3DReactor() {
+            const reactorGroup = new THREE.Group();
+
+            const cylinderGeo = new THREE.CylinderGeometry(4, 4, 12, 32, 1, true);
+            const cylinderMat = new THREE.MeshPhysicalMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.25,
+                roughness: 0.1,
+                transmission: 0.9,
+                thickness: 0.5,
+                side: THREE.DoubleSide
+            });
+            reactorMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
+            reactorGroup.add(reactorMesh);
+
+            const capGeo = new THREE.SphereGeometry(4, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const capMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 });
+            
+            const topCap = new THREE.Mesh(capGeo, capMat);
+            topCap.position.y = 6;
+            reactorGroup.add(topCap);
+
+            const bottomCap = new THREE.Mesh(capGeo, capMat);
+            bottomCap.position.y = -6;
+            bottomCap.rotation.x = Math.PI;
+            reactorGroup.add(bottomCap);
+
+            const catBedGeo = new THREE.CylinderGeometry(3.8, 3.8, 2, 32);
+            const catBedMat = new THREE.MeshStandardMaterial({
+                color: 0xd97706, 
+                roughness: 0.9,
+                metalness: 0.3,
+                wireframe: false
+            });
+            catalystBedMesh = new THREE.Mesh(catBedGeo, catBedMat);
+            catalystBedMesh.position.y = -3;
+            reactorGroup.add(catalystBedMesh);
+
+            for (let y = -4; y <= 4; y += 4) {
+                const ringGeo = new THREE.TorusGeometry(4.05, 0.1, 16, 100);
+                const ringMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = y;
+                reactorGroup.add(ring);
+            }
+
+            scene.add(reactorGroup);
+        }
+
+        function createN2Molecule() {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.3 }); 
+            const geo = new THREE.SphereGeometry(0.35, 16, 16);
+
+            const atom1 = new THREE.Mesh(geo, mat);
+            atom1.position.x = -0.25;
+            const atom2 = new THREE.Mesh(geo, mat);
+            atom2.position.x = 0.25;
+
+            group.add(atom1);
+            group.add(atom2);
+            group.userData = { type: 'N2' };
+            return group;
+        }
+
+        function createH2Molecule() {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 }); 
+            const geo = new THREE.SphereGeometry(0.22, 16, 16);
+
+            const atom1 = new THREE.Mesh(geo, mat);
+            atom1.position.x = -0.18;
+            const atom2 = new THREE.Mesh(geo, mat);
+            atom2.position.x = 0.18;
+
+            group.add(atom1);
+            group.add(atom2);
+            group.userData = { type: 'H2' };
+            return group;
+        }
+
+        function createNH3Molecule() {
+            const group = new THREE.Group();
+            const nMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.3 }); 
+            const hMat = new THREE.MeshStandardMaterial({ color: 0x2dd4bf, roughness: 0.2 }); 
+            
+            const nGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const hGeo = new THREE.SphereGeometry(0.2, 16, 16);
+
+            const nAtom = new THREE.Mesh(nGeo, nMat);
+            nAtom.position.set(0, 0.2, 0);
+            group.add(nAtom);
+
+            for (let i = 0; i < 3; i++) {
+                const angle = (i * Math.PI * 2) / 3;
+                const hAtom = new THREE.Mesh(hGeo, hMat);
+                hAtom.position.set(Math.cos(angle) * 0.35, -0.15, Math.sin(angle) * 0.35);
+                group.add(hAtom);
+            }
+
+            group.userData = { type: 'NH3' };
+            return group;
+        }
+
+        function generate3DMolecules() {
+            while (moleculesGroup.children.length > 0) {
+                moleculesGroup.remove(moleculesGroup.children[0]);
+            }
+            state.molecules = [];
+
+            const total = 40;
+            for (let i = 0; i < total; i++) {
+                let mol;
+                const rand = Math.random();
+                if (rand < 0.25) {
+                    mol = createN2Molecule();
+                } else if (rand < 0.8) {
+                    mol = createH2Molecule();
+                } else {
+                    mol = createNH3Molecule();
+                }
+
+                mol.position.set(
+                    (Math.random() - 0.5) * 6,
+                    (Math.random() - 0.5) * 10,
+                    (Math.random() - 0.5) * 6
+                );
+
+                mol.userData.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.05,
+                    (Math.random() - 0.5) * 0.05,
+                    (Math.random() - 0.5) * 0.05
+                );
+
+                moleculesGroup.add(mol);
+                state.molecules.push(mol);
+            }
+        }
+
+        function initChart() {
+            const ctxElem = document.getElementById('chartConcentration');
+            if (!ctxElem) return;
+            const ctx = ctxElem.getContext('2d');
+            
+            const initialYield = 15.0;
+            const initNH3 = (initialYield / 100) * 28;
+            const initN2 = 14 - (initialYield / 100) * 6;
+            const initH2 = 24 - (initialYield / 100) * 12;
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 20}, (_, i) => i * 5 + 's'),
+                    datasets: [
+                        { label: 'NH₃ (M)', data: Array(20).fill(initNH3), borderColor: '#0d9488', backgroundColor: 'rgba(13, 148, 136, 0.1)', tension: 0.3, fill: true },
+                        { label: 'N₂ (M)', data: Array(20).fill(initN2), borderColor: '#2563eb', tension: 0.3 },
+                        { label: 'H₂ (M)', data: Array(20).fill(initH2), borderColor: '#94a3b8', tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { boxWidth: 10, font: { size: 10 } } } },
+                    scales: {
+                        x: { display: true, grid: { display: false } },
+                        y: { display: true, min: 0, max: 40 }
+                    }
+                }
+            });
+        }
+
+        function calculateEquilibrium() {
+            const T = state.temp; 
+            const P = state.press; 
+
+            let tempFactor = Math.max(0.05, 1.0 - (T - 200) / 450);
+            let pressFactor = Math.min(1.0, P / 300);
+
+            let targetYield = (tempFactor * 0.6 + pressFactor * 0.4) * 98.0;
+            state.yieldNH3 = parseFloat(targetYield.toFixed(1));
+
+            const statYieldEl = document.getElementById('statYield');
+            if (statYieldEl) statYieldEl.innerText = state.yieldNH3;
+
+            let speedText = 'Rất chậm';
+            if (state.catalyst) {
+                speedText = T >= 400 ? 'Rất nhanh (Tối ưu)' : 'Trung bình';
+            } else {
+                speedText = T >= 500 ? 'Chậm (Thiếu Fe)' : 'Rất chậm';
+            }
+            const statSpeedEl = document.getElementById('statSpeed');
+            if (statSpeedEl) statSpeedEl.innerText = speedText;
+
+            const alertBox = document.getElementById('statusAlert');
+            const alertText = document.getElementById('statusAlertText');
+            if (alertBox && alertText) {
+                if (T > 550) {
+                    alertBox.classList.remove('hidden');
+                    alertText.innerText = 'Nhiệt độ quá cao! Cân bằng chuyển dịch ngược làm giảm NH₃!';
+                } else if (P < 50) {
+                    alertBox.classList.add('hidden');
+                    alertText.innerText = 'Áp suất quá thấp! Hiệu suất tạo NH₃ rất nhỏ!';
+                } else {
+                    alertBox.classList.add('hidden');
+                }
+            }
+
+            updateChartEquilibrium();
+        }
+
+        function updateParams() {
+            const tempEl = document.getElementById('sliderTemp');
+            const pressEl = document.getElementById('sliderPress');
+            const catEl = document.getElementById('toggleCat');
+
+            if (tempEl) state.temp = parseInt(tempEl.value);
+            if (pressEl) state.press = parseInt(pressEl.value);
+            if (catEl) state.catalyst = catEl.checked;
+
+            const valTempEl = document.getElementById('valTemp');
+            const valPressEl = document.getElementById('valPress');
+            const valCatEl = document.getElementById('valCat');
+
+            if (valTempEl) valTempEl.innerHTML = `${state.temp} &deg;C`;
+            if (valPressEl) valPressEl.innerText = `${state.press} bar`;
+            if (valCatEl) valCatEl.innerText = state.catalyst ? 'Có xúc tác' : 'Không xúc tác';
+
+            calculateEquilibrium();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (state.isPlaying) {
+                state.timeStep += 0.05;
+                const speedMult = (state.temp / 300) * (state.catalyst ? 1.5 : 0.5);
+
+                state.molecules.forEach(mol => {
+                    mol.position.addScaledVector(mol.userData.velocity, speedMult);
+
+                    if (Math.abs(mol.position.x) > 3.2) mol.userData.velocity.x *= -1;
+                    if (Math.abs(mol.position.z) > 3.2) mol.userData.velocity.z *= -1;
+                    if (Math.abs(mol.position.y) > 5.0) mol.userData.velocity.y *= -1;
+
+                    mol.rotation.x += 0.02;
+                    mol.rotation.y += 0.02;
+                });
+
+                if (Math.floor(state.timeStep * 10) % 10 === 0) {
+                    pushChartStepData();
+                }
+            }
+
+            if (reactorMesh) {
+                reactorMesh.rotation.y += 0.002;
+            }
+
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function updateChartEquilibrium() {
+            if (!chartInstance) return;
+            const targetYield = state.yieldNH3;
+            const targetNH3Conc = Math.max(2, (targetYield / 100) * 28);
+            const targetN2Conc = Math.max(3, 14 - (targetYield / 100) * 6);
+            const targetH2Conc = Math.max(5, 24 - (targetYield / 100) * 12);
+
+            const datasets = chartInstance.data.datasets;
+            const len = datasets[0].data.length;
+            
+            datasets[0].data[len - 1] = parseFloat(targetNH3Conc.toFixed(1));
+            datasets[1].data[len - 1] = parseFloat(targetN2Conc.toFixed(1));
+            datasets[2].data[len - 1] = parseFloat(targetH2Conc.toFixed(1));
+            chartInstance.update();
+        }
+
+        function pushChartStepData() {
+            if (!chartInstance) return;
+            const datasets = chartInstance.data.datasets;
+            const targetYield = state.yieldNH3; 
+
+            const targetNH3Conc = Math.max(2, (targetYield / 100) * 28);
+            const targetN2Conc = Math.max(3, 14 - (targetYield / 100) * 6);
+            const targetH2Conc = Math.max(5, 24 - (targetYield / 100) * 12);
+
+            let curNH3 = datasets[0].data[datasets[0].data.length - 1];
+            let curN2 = datasets[1].data[datasets[1].data.length - 1];
+            let curH2 = datasets[2].data[datasets[2].data.length - 1];
+
+            let nextNH3 = curNH3 + (targetNH3Conc - curNH3) * 0.2;
+            let nextN2 = curN2 + (targetN2Conc - curN2) * 0.2;
+            let nextH2 = curH2 + (targetH2Conc - curH2) * 0.2;
+
+            datasets[0].data.shift();
+            datasets[0].data.push(parseFloat(nextNH3.toFixed(1)));
+
+            datasets[1].data.shift();
+            datasets[1].data.push(parseFloat(nextN2.toFixed(1)));
+
+            datasets[2].data.shift();
+            datasets[2].data.push(parseFloat(nextH2.toFixed(1)));
+
+            chartInstance.update();
+        }
+
+        function togglePlay() {
+            state.isPlaying = !state.isPlaying;
+            const btn = document.getElementById('btnPlay');
+            const text = document.getElementById('btnPlayText');
+            const icon = document.getElementById('btnPlayIcon');
+            if (!btn || !text) return;
+
+            if (state.isPlaying) {
+                btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+                text.innerText = 'Tạm dừng';
+                if (icon) {
+                    icon.setAttribute('data-lucide', 'pause');
+                }
+            } else {
+                btn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+                btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                text.innerText = 'Tiếp tục';
+                if (icon) {
+                    icon.setAttribute('data-lucide', 'play');
+                }
+            }
+            initLucide();
+        }
+
+        function resetSimulation() {
+            state.isPlaying = false;
+            state.timeStep = 0;
+            const tempEl = document.getElementById('sliderTemp');
+            const pressEl = document.getElementById('sliderPress');
+            const catEl = document.getElementById('toggleCat');
+
+            if (tempEl) tempEl.value = 450;
+            if (pressEl) pressEl.value = 200;
+            if (catEl) catEl.checked = true;
+
+            updateParams();
+            generate3DMolecules();
+
+            if (chartInstance) {
+                const initialYield = 15.0;
+                const initNH3 = (initialYield / 100) * 28;
+                const initN2 = 14 - (initialYield / 100) * 6;
+                const initH2 = 24 - (initialYield / 100) * 12;
+
+                chartInstance.data.datasets[0].data = Array(20).fill(initNH3);
+                chartInstance.data.datasets[1].data = Array(20).fill(initN2);
+                chartInstance.data.datasets[2].data = Array(20).fill(initH2);
+                chartInstance.update();
+            }
+
+            const btn = document.getElementById('btnPlay');
+            const btnPlayText = document.getElementById('btnPlayText');
+            const icon = document.getElementById('btnPlayIcon');
+            if (btn && btnPlayText) {
+                btnPlayText.innerText = 'Bắt đầu';
+                btn.classList.remove('bg-amber-600');
+                btn.classList.add('bg-indigo-600');
+                if (icon) {
+                    icon.setAttribute('data-lucide', 'play');
+                }
+            }
+            initLucide();
+        }
+
+        function toggleTeacherMode() {
+            state.teacherMode = !state.teacherMode;
+            const text = document.getElementById('teacherModeText');
+            const btnAnswer = document.getElementById('btnToggleAnswer');
+
+            if (state.teacherMode) {
+                if (text) text.innerText = 'Chế độ: Giáo viên';
+                if (btnAnswer) btnAnswer.classList.remove('hidden');
+            } else {
+                if (text) text.innerText = 'Chế độ: Học sinh';
+                if (btnAnswer) btnAnswer.classList.add('hidden');
+                const answerBox = document.getElementById('answerBox');
+                if (answerBox) answerBox.classList.add('hidden');
+            }
+        }
+
+        function toggleAnswer() {
+            state.showAnswer = !state.showAnswer;
+            const answerBox = document.getElementById('answerBox');
+            if (answerBox) {
+                if (state.showAnswer) {
+                    answerBox.classList.remove('hidden');
+                } else {
+                    answerBox.classList.add('hidden');
+                }
+            }
+        }
+
+        function selectActivity(actNum) {
+            state.currentActivity = actNum;
+            const actProgress = document.getElementById('actProgress');
+            if (actProgress) actProgress.innerText = `${actNum}/5`;
+
+            for (let i = 1; i <= 5; i++) {
+                const btn = document.getElementById(`actBtn${i}`);
+                if (!btn) continue;
+                if (i === actNum) {
+                    btn.className = "w-full text-left p-3 rounded-xl border transition-all flex items-start gap-3 bg-indigo-50 border-indigo-200 text-indigo-900 shadow-sm font-semibold";
+                } else {
+                    btn.className = "w-full text-left p-3 rounded-xl border border-slate-200 transition-all flex items-start gap-3 hover:bg-slate-50 text-slate-700";
+                }
+            }
+
+            const guideText = document.getElementById('guideText');
+            const answerText = document.getElementById('answerText');
+            const quizContainer = document.getElementById('quizContainer');
+
+            if (quizContainer) quizContainer.classList.add('hidden');
+
+            switch (actNum) {
+                case 1:
+                    if (guideText) guideText.innerHTML = "<strong>Nhiệm vụ 1:</strong> Quan sát mô hình 3D phân tử N<sub>2</sub>, H<sub>2</sub> và NH<sub>3</sub>. Giải thích tại sao liên kết ba N&equiv;N bền vững lại làm phản ứng tổng hợp NH<sub>3</sub> diễn ra khó khăn ở điều kiện thường?";
+                    if (answerText) answerText.innerHTML = "Liên kết ba N&equiv;N có năng lượng liên kết cực lớn (945 kJ/mol), rất trơ ở nhiệt độ thường. Cần nhiệt độ thích hợp và xúc tác để bẻ gãy liên kết.";
+                    break;
+                case 2:
+                    if (guideText) guideText.innerHTML = "<strong>Nhiệm vụ 2:</strong> Thay đổi thanh nhiệt độ từ 200&nbsp;&deg;C lên 650&nbsp;&deg;C. Quan sát đồ thị nồng độ NH<sub>3</sub> và các chất thay đổi như thế nào?";
+                    if (answerText) answerText.innerHTML = "Vì phản ứng thuận tỏa nhiệt (&Delta;<sub>r</sub>H<sup>0</sup><sub>298</sub> = -91,8 kJ &lt; 0), khi tăng nhiệt độ, cân bằng chuyển dịch theo chiều nghịch, nồng độ NH<sub>3</sub> giảm trên đồ thị.";
+                    break;
+                case 3:
+                    if (guideText) guideText.innerHTML = "<strong>Nhiệm vụ 3:</strong> Kéo áp suất từ 10 bar lên 350 bar. Quan sát sự biến đổi nồng độ trên đồ thị cân bằng?";
+                    if (answerText) answerText.innerHTML = "Phản ứng giảm số mol khí (4 mol &rarr; 2 mol). Tăng áp suất làm cân bằng chuyển dịch theo chiều thuận, nồng độ NH<sub>3</sub> trên đồ thị tăng rõ rệt.";
+                    break;
+                case 4:
+                    if (guideText) guideText.innerHTML = "<strong>Nhiệm vụ 4:</strong> Bật/tắt chất xúc tác Fe. Tại sao trong công nghiệp người ta lại chọn điều kiện 400 - 450&nbsp;&deg;C, 150 - 200 bar cùng xúc tác bột sắt?";
+                    if (answerText) answerText.innerHTML = "Đây là điều kiện thỏa hiệp hài hòa giữa hiệu suất cân bằng và tốc độ phản ứng đủ nhanh, đảm bảo hiệu quả kinh tế.";
+                    break;
+                case 5:
+                    if (guideText) guideText.innerHTML = "<strong>Nhiệm vụ 5:</strong> Tham gia thử thách Minigame! Trả lời 5 câu hỏi trắc nghiệm không trùng lặp để kiểm tra toàn diện kiến thức.";
+                    if (answerText) answerText.innerHTML = "Đánh giá khả năng vận dụng tổng hợp lý thuyết cân bằng Le Chatelier, enthalpy và tốc độ phản ứng.";
+                    if (quizContainer) quizContainer.classList.remove('hidden');
+                    loadQuizQuestion();
+                    break;
+            }
+        }
+
+        const quizData = [
+            {
+                q: "Câu 1: Phát biểu nào sau đây đúng khi nói về phản ứng tổng hợp ammonia từ nitrogen và hydrogen?",
+                options: [
+                    "Là phản ứng thuận nghịch và tỏa nhiệt mạnh",
+                    "Là phản ứng một chiều và thu nhiệt",
+                    "Là phản ứng thuận nghịch và thu nhiệt",
+                    "Là phản ứng tự xảy ra ở nhiệt độ phòng không cần xúc tác"
+                ],
+                a: 0,
+                explain: "Phản ứng tổng hợp NH₃ có phương trình N₂(g) + 3H₂(g) ⇌ 2NH₃(g) với ΔrHP298 = -91,8 kJ, đây là phản ứng thuận nghịch và tỏa nhiệt."
+            },
+            {
+                q: "Câu 2: Theo nguyên lý chuyển dịch cân bằng Le Chatelier, để cân bằng chuyển dịch theo chiều thuận (tăng hiệu suất tạo NH₃), ta cần tác động yếu tố nào?",
+                options: [
+                    "Tăng nhiệt độ và giảm áp suất",
+                    "Giảm nhiệt độ và tăng áp suất",
+                    "Giảm nhiệt độ và giảm áp suất",
+                    "Tăng nhiệt độ và tăng áp suất"
+                ],
+                a: 1,
+                explain: "Vì phản ứng thuận tỏa nhiệt nên giảm T giúp chuyển dịch chiều thuận; phản ứng giảm số mol khí (4 mol → 2 mol) nên tăng P giúp chuyển dịch chiều thuận."
+            },
+            {
+                q: "Câu 3: Vai trò chủ yếu của chất xúc tác bột sắt (Fe) trong quá trình Haber-Bosch là gì?",
+                options: [
+                    "Làm tăng hằng số cân bằng K của phản ứng",
+                    "Làm dịch chuyển cân bằng hóa học về phía tạo ra NH₃",
+                    "Làm tăng tốc độ phản ứng, giúp hệ nhanh chóng đạt trạng thái cân bằng",
+                    "Làm giảm nhiệt độ cần thiết của lò phản ứng xuống dưới 100°C"
+                ],
+                a: 2,
+                explain: "Chất xúc tác làm tăng tốc độ phản ứng thuận và nghịch như nhau, giúp hệ nhanh đạt trạng thái cân bằng chứ không làm thay đổi vị trí cân bằng."
+            },
+            {
+                q: "Câu 4: Tại sao trong thực tế sản xuất công nghiệp, người ta không chọn nhiệt độ quá thấp (ví dụ 200°C) mặc dù nhiệt độ thấp cho hiệu suất cân bằng rất cao?",
+                options: [
+                    "Vì ở nhiệt độ thấp áp suất trong lò sẽ bị mất ổn định",
+                    "Vì ở nhiệt độ thấp tốc độ phản ứng quá chậm, thời gian đạt cân bằng quá lâu",
+                    "Vì xúc tác bột sắt bị nóng chảy ở nhiệt độ thấp",
+                    "Vì phản ứng không xảy ra khi nhiệt độ dưới 300°C"
+                ],
+                a: 1,
+                explain: "Nhiệt độ thấp làm giảm năng lượng động học của các phân tử, khiến tốc độ phản ứng cực kỳ chậm, không đáp ứng được yêu cầu sản lượng kinh tế."
+            },
+            {
+                q: "Câu 5: Cho biết biến thiên enthalpy chuẩn của phản ứng tổng hợp ammonia là ΔrHP298 = -91,8 kJ. Khi sản xuất 1 mol NH₃(g) theo phản ứng trên, lượng nhiệt tỏa ra là bao nhiêu?",
+                options: [
+                    "91,8 kJ",
+                    "183,6 kJ",
+                    "45,9 kJ",
+                    "30,6 kJ"
+                ],
+                a: 2,
+                explain: "Theo phương trình, tạo ra 2 mol NH₃ tỏa ra 91,8 kJ. Vậy tạo ra 1 mol NH₃ sẽ tỏa ra lượng nhiệt bằng 91,8 / 2 = 45,9 kJ."
+            }
+        ];
+
+        let currentQuizIdx = 0;
+
+        function loadQuizQuestion() {
+            const qData = quizData[currentQuizIdx];
+            const qEl = document.getElementById('quizQuestion');
+            if (qEl) qEl.innerText = qData.q;
+            
+            const progressEl = document.getElementById('quizProgress');
+            if (progressEl) progressEl.innerText = `Câu hỏi ${currentQuizIdx + 1}/5`;
+
+            const optContainer = document.getElementById('quizOptions');
+            if (!optContainer) return;
+            optContainer.innerHTML = '';
+
+            qData.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-2 rounded bg-white hover:bg-amber-100 border border-amber-200 text-xs text-amber-900 transition font-medium";
+                btn.innerText = `${String.fromCharCode(65 + idx)}. ${opt}`;
+                btn.onclick = () => checkQuizAnswer(idx);
+                optContainer.appendChild(btn);
+            });
+        }
+
+        function checkQuizAnswer(selectedIdx) {
+            const qData = quizData[currentQuizIdx];
+            if (selectedIdx === qData.a) {
+                state.quizScore += 20;
+                alert("Chính xác! " + qData.explain);
+            } else {
+                alert("Chưa đúng! " + qData.explain);
+            }
+
+            const scoreEl = document.getElementById('quizScore');
+            if (scoreEl) scoreEl.innerText = `Điểm: ${state.quizScore}`;
+            
+            currentQuizIdx++;
+            if (currentQuizIdx >= quizData.length) {
+                alert(`Chúc mừng cô và trò đã hoàn thành xuất sắc Minigame! Tổng điểm đạt được: ${state.quizScore}/100 điểm.`);
+                currentQuizIdx = 0;
+                state.quizScore = 0;
+            }
+            loadQuizQuestion();
+        }
+
+        function resetCamera() {
+            if (camera && controls) {
+                camera.position.set(0, 10, 25);
+                controls.target.set(0, 0, 0);
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvasContainer');
+            if (!container || !renderer || !camera) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+    </script>
+</body>
+</html>
